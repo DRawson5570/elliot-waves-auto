@@ -2449,6 +2449,11 @@ def generate_trade_recommendation(analysis_summary, stock_data, risk_percent=1.0
                     tp1_price = entry_price - (sl_distance * tp1_rrr)
                     tp2_price = entry_price - (sl_distance * tp2_rrr)
             
+            # Get currency from stock data
+            currency = 'USD'  # Default currency
+            if hasattr(stock_data, 'columns') and 'Currency' in stock_data.columns and not stock_data['Currency'].isnull().all():
+                currency = stock_data['Currency'].iloc[0]
+            
             # Create the recommendation
             recommendation = {
                 'status': 'Trade Found',
@@ -2465,6 +2470,9 @@ def generate_trade_recommendation(analysis_summary, stock_data, risk_percent=1.0
                 'confidence_score': 80,  # Default confidence score
                 'position_size_units': position_size_units,
                 'risk_amount': risk_amount,
+                'currency': currency,
+                'risk_percent': risk_percent,
+                'account_size': demo_account_size,
                 'notes': f"Super Strategy recommendation based on {global_trade_recommendation.get('wave_label', 'W5')}"
             }
             
@@ -2494,7 +2502,7 @@ def generate_trade_recommendation(analysis_summary, stock_data, risk_percent=1.0
     is_impulse_up = details.get('is_upward', True)
     base_score = details.get('score', 0)
     guidelines = details.get('guidelines', {})
-    currency = stock_data['Currency'].iloc[0] if 'Currency' in stock_data.columns and not stock_data['Currency'].isnull().all() else ''
+    currency = stock_data['Currency'].iloc[0] if 'Currency' in stock_data.columns and not stock_data['Currency'].isnull().all() else 'USD'
 
     if last_point_overall is None or last_ew_point is None:
         recommendation['reason'] = "Last point data is missing."
@@ -2784,6 +2792,33 @@ def generate_trade_recommendation(analysis_summary, stock_data, risk_percent=1.0
     })
 
     print(f"  Result: {recommendation['status']} - {signal} signal found.")
+    
+    # Also update the global trade recommendation if this is a successful trade
+    # This ensures the frontend gets the trade data for display
+    if recommendation['status'] == 'Trade Found':
+        global_trade_recommendation = {
+            'recommendation': signal.upper(),
+            'signals': {
+                'entry': recommendation['entry_price'],
+                'stop_loss': recommendation['stop_loss_price'],
+                'targets': [recommendation['tp1_price'], recommendation['tp2_price']] if recommendation['tp1_price'] else [],
+                'risk_reward': recommendation.get('tp1_rrr', 0),
+                'direction': signal.lower()
+            },
+            'analysis': {},
+            'wave_label': last_label,
+            'status': 'Trade Found',
+            # Add fields required by template
+            'risk_amount': recommendation.get('risk_amount', 0),
+            'currency': recommendation.get('currency', 'USD'),
+            'risk_percent': recommendation.get('risk_percent', 1.0),
+            'account_size': recommendation.get('account_size', 10000),
+            'confidence_score': recommendation.get('confidence_score', 50),
+            'notes': recommendation.get('notes', ''),
+            'reason': recommendation.get('reason', '')
+        }
+        print(f"  DEBUG: Updated global_trade_recommendation with fallback trade data")
+    
     return recommendation
 
 # ==============================================================================
